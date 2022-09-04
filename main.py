@@ -1,10 +1,4 @@
 
-import nnfs
-from nnfs.datasets import spiral_data
-from nnfs.datasets import sine_data
-
-
-
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -12,7 +6,6 @@ from tqdm import tqdm
 import os
 import urllib
 import urllib.request
-import cv2
 
 import copy
 
@@ -75,6 +68,9 @@ model.set(
 # Finalize the model
 model.finalize()
 # Train the model
+
+model.train(X_train, y_train, validation_data=None,
+                epochs=5, batch_size=128, print_every=1e9)
 
 
 # model.save('Full.model')
