@@ -70,7 +70,7 @@ model.finalize()
 # Train the model
 
 model.train(X_train, y_train, validation_data=None,
-                epochs=5, batch_size=128, print_every=1e9)
+                epochs=5, batch_size=128)
 
 
 # model.save('Full.model')

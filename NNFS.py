@@ -651,7 +651,7 @@ class Model:
     def train(self, X, y, *, 
                 epochs=1, 
                 batch_size=None,
-                print_every=1, 
+                print_every='epoch', 
                 validation_data=None, 
                 validation_split=None,
                 history='epoch'):
@@ -718,22 +718,24 @@ class Model:
                 for layer in self.trainable_layers:
                     self.optimizer.update_params(layer)
                 self.optimizer.post_update_params()
-
-                if not step % print_every and step != 0:
-                    print(f'epoch: {epoch}, ' +
-                          f'step: {step}, ' +
-                          f'acc: {accuracy:.3f}, ' +
-                          f'loss: {loss:.3f} (' +
-                          f'data_loss: {data_loss:.3f}, ' +
-                          f'reg_loss: {regularization_loss:.3f}), ' +
-                          f'lr: {self.optimizer.current_learning_rate:.6f}')
-                if step == train_steps -1:
-                    print(f'epoch: {epoch}, ' +
-                          f'acc: {accuracy:.3f}, ' +
-                          f'loss: {loss:.3f} (' +
-                          f'data_loss: {data_loss:.3f}, ' +
-                          f'reg_loss: {regularization_loss:.3f}), ' +
-                          f'lr: {self.optimizer.current_learning_rate:.6f}')
+                
+                if print_every != 'epoch':
+                    if not step % print_every and step != 0:
+                        print(f'epoch: {epoch}, ' +
+                              f'step: {step}, ' +
+                              f'acc: {accuracy:.3f}, ' +
+                              f'loss: {loss:.3f} (' +
+                              f'data_loss: {data_loss:.3f}, ' +
+                              f'reg_loss: {regularization_loss:.3f}), ' +
+                              f'lr: {self.optimizer.current_learning_rate:.6f}')
+                else:
+                    if step == train_steps -1:
+                        print(f'epoch: {epoch}, ' +
+                              f'acc: {accuracy:.3f}, ' +
+                              f'loss: {loss:.3f} (' +
+                              f'data_loss: {data_loss:.3f}, ' +
+                              f'reg_loss: {regularization_loss:.3f}), ' +
+                              f'lr: {self.optimizer.current_learning_rate:.6f}')
                     
                 if step == train_steps -1 and history=='epoch':
                     self.history_epochs.append(epoch)
