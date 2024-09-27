@@ -2,7 +2,6 @@ import numpy as np
 import pickle
 import copy
 
-
 """
 Input layer for forward pass
 """
@@ -13,10 +12,206 @@ class Layer_Input:
         self.output = inputs
 
 
+
+"""
+Convolution layer
+"""
+class Layer_Convolutional:
+    def __init__(self, input_shape, filter_size, n_filters, stride=1, padding=0,
+                                                                        weight_regularizer_L1=0,
+                                                                        weight_regularizer_L2=0,
+                                                                        bias_regularizer_L1=0,
+                                                                        bias_regularizer_L2=0):
+        self.n_filters = n_filters
+        self.filter_size = filter_size
+        self.input_shape = input_shape
+        self.stride = stride
+        self.padding = padding
+
+        self.weight_regularizer_L1 = weight_regularizer_L1
+        self.weight_regularizer_L2 = weight_regularizer_L2
+        self.bias_regularizer_L1 = bias_regularizer_L1
+        self.bias_regularizer_L2 = bias_regularizer_L2
+
+
+        # Initialize filters and biases
+        self.filters = np.random.randn(self.n_filters, 1, self.filter_size, self.filter_size) * 0.1
+        self.weights = self.filters
+        self.biases = np.zeros((self.n_filters, 1))
+
+    def forward(self, input, training):
+        #print("Layer_Convolutional: forward")
+
+        self.filters = self.weights
+
+        """
+        Input shape: (batch_size, channels, height, width)
+        Output shape: (batch_size, n_filters, output_height, output_width)
+        """
+        # Add channel dimension if missing (for grayscale images like MNIST)
+        if input.ndim == 3:  # Shape (batch_size, height, width)
+            input = np.expand_dims(input, axis=1)  # Shape becomes (batch_size, 1, height, width)
+    
+        # Correctly pad only the height and width dimensions
+        self.input = np.pad(input, ((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)), mode='constant')
+        
+        batch_size, input_channels, input_height, input_width = self.input.shape
+        filter_height, filter_width = self.filter_size, self.filter_size
+        
+        # Calculate output dimensions
+        output_height = (input_height - filter_height) // self.stride + 1
+        output_width = (input_width - filter_width) // self.stride + 1
+        
+        # Initialize output
+        self.output = np.zeros((batch_size, self.n_filters, output_height, output_width))
+
+        # Perform convolution for each item in the batch
+        for b in (range(batch_size)):
+            
+            for f in range(self.n_filters):
+                for i in range(0, output_height):
+                    for j in range(0, output_width):
+                        region = self.input[b, :, 
+                                            i * self.stride: i * self.stride + filter_height, 
+                                            j * self.stride: j * self.stride + filter_width]
+                        self.output[b, f, i, j] = np.sum(region * self.filters[f]) + self.biases[f]
+                        
+        return self.output
+
+    def backward(self, dvalues):
+        #print("Layer_Convolutional: backward")
+
+        """
+        dvalues: gradient passed from the next layer, shape (batch_size, n_filters, output_height, output_width)
+        """
+        # Initialize gradients for inputs
+        
+        self.dweights = np.zeros_like(self.filters)
+        self.dbiases = np.zeros_like(self.biases)
+
+
+        """
+        dvalues: gradient passed from the next layer, shape (batch_size, n_filters, output_height, output_width)
+        """
+        # Initialize gradients for inputs with the correct shape
+        self.dinputs = np.zeros(self.input.shape)  # Shape (batch_size, channels, input_height, input_width)
+        
+        # Loop through the batch
+
+        for b in (range(dvalues.shape[0])):  # dvalues.shape[0] is the batch size
+            # Loop through the filters
+            for f in range(self.n_filters):
+                for i in range(dvalues.shape[2]):  # Loop over output height
+                    for j in range(dvalues.shape[3]):  # Loop over output width
+                        # Get the starting position in the input for the filter application
+                        start_i = i * self.stride
+                        start_j = j * self.stride
+
+                        # Make sure to extract the region of input that the filter is applied to
+                        region = self.input[b, :, start_i:start_i + self.filter_size, start_j:start_j + self.filter_size]
+                        # Gradient w.r.t filter weights
+                        self.dweights[f] += region * dvalues[b, f, i, j]
+
+                        # Gradient w.r.t biases
+                        self.dbiases[f] += dvalues[b, f, i, j]
+
+                        # Accumulate the gradient with respect to the inputs
+                        self.dinputs[b, :, start_i:start_i + self.filter_size, start_j:start_j + self.filter_size] += self.filters[f] * dvalues[b, f, i, j]
+
+        return self.dinputs
+
+
+    # Retrive layer parameter
+    def get_parameters(self):
+        return self.weights, self.biases
+    
+    # Set weights and biases in layer insatants
+    def set_parameters(self, weights, biases):
+        self.weights = weights
+        self.biases = biases
+
+
+class Layer_Reshape:
+    def forward(self, input, training):
+        # Save the input shape to use it later during the backward pass
+        self.input_shape = input.shape
+        # Flatten the input to a 1D vector
+        self.output = input.reshape(input.shape[0], -1)  # Preserves the batch size (input.shape[0])
+        return self.output
+
+    def backward(self, dvalues):
+        # Reshape the gradient into the original input shape
+        self.dinputs = dvalues.reshape(self.input_shape)
+        return self.dinputs
+
+
+
+"""
+Max Pool layer
+"""
+class MaxPool:
+    def __init__(self, size, stride):
+        self.size = size  # Size of the pooling window
+        self.stride = stride  # Stride for the pooling operation
+        self.input = None  # To store the input during forward pass
+        self.indices = None  # To store the indices of the max values
+
+    def forward(self, input, training):
+        # Store input
+        self.input = input
+        
+        # Calculate output dimensions
+        batch_size, channels, input_height, input_width = input.shape
+        output_height = (input_height - self.size) // self.stride + 1
+        output_width = (input_width - self.size) // self.stride + 1
+        
+        # Initialize output and indices
+        self.output = np.zeros((batch_size, channels, output_height, output_width))
+        self.indices = np.zeros((batch_size, channels, output_height, output_width), dtype=int)
+
+        # Perform max pooling
+        for b in range(batch_size):
+            for c in range(channels):
+                for i in range(output_height):
+                    for j in range(output_width):
+                        start_i = i * self.stride
+                        start_j = j * self.stride
+                        region = input[b, c, start_i:start_i + self.size, start_j:start_j + self.size]
+                        self.output[b, c, i, j] = np.max(region)
+
+                        # Store the index of the max value in the region
+                        max_index = np.argmax(region)
+                        self.indices[b, c, i, j] = max_index
+
+        return self.output
+
+    def backward(self, dvalues):
+        # Initialize gradients for the inputs
+        batch_size, channels, input_height, input_width = self.input.shape
+        self.dinputs = np.zeros(self.input.shape)
+        
+        # Loop through the batch
+        for b in range(batch_size):
+            for c in range(channels):
+                for i in range(dvalues.shape[2]):  # output height
+                    for j in range(dvalues.shape[3]):  # output width
+                        # Get the coordinates of the max value in the input
+                        start_i = i * self.stride
+                        start_j = j * self.stride
+                        region = self.input[b, c, start_i:start_i + self.size, start_j:start_j + self.size]
+                        max_index = np.unravel_index(np.argmax(region), region.shape)
+
+                        # Set the gradient for the max index
+                        self.dinputs[b, c, start_i + max_index[0], start_j + max_index[1]] += dvalues[b, c, i, j]
+        
+        return self.dinputs
+
+
 """
 Dense layer
 """
 class Layer_Dense:
+
     def __init__(self, n_inputs, n_neurons, 
                  weight_regularizer_L1=0, weight_regularizer_L2=0, 
                  bias_regularizer_L1=0, bias_regularizer_L2=0):
@@ -42,6 +237,7 @@ class Layer_Dense:
     # Backwards pass
     def backward(self, dvalues):
         # Gradients on parameters
+
         self.dweights = np.dot(self.inputs.T, dvalues)
         self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
         
@@ -66,6 +262,8 @@ class Layer_Dense:
         
         # Gradient on values
         self.dinputs = np.dot(dvalues, self.weights.T)
+        ###
+        self.dinputs = self.dinputs.reshape(self.inputs.shape)
        
     # Retrive layer parameter
     def get_parameters(self):
@@ -609,6 +807,7 @@ class Optimizer_Adam:
         # with squre rooted cache
         layer.weights += -self.current_learning_rate * weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + self.epsilon)
         layer.biases += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
+
             
         
     def post_update_params(self):
@@ -647,7 +846,7 @@ class Model:
         if accuracy is not None:
             self.accuracy = accuracy
         
-# Train the model
+    # Train the model
     def train(self, X, y, *, 
                 epochs=1, 
                 batch_size=None,
